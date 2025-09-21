@@ -10,12 +10,6 @@ function createParticles() {
         container.appendChild(particle);
     }
 }
-
-createParticles();
-
-const apiKey = 'AIzaSyDfLiQ-idXEY4BOE2pncBSGjiFsqMKoCiE';
-const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
-
 let currentPalette = [];
 
 // Color name mapping
@@ -460,7 +454,6 @@ function generateColorBlindReport(palette) {
     return html;
 }
 
-// Generate palette
 async function generatePalette() {
     const textPrompt = document.getElementById('textPrompt').value.trim();
     const imageFile = document.getElementById('imageUpload').files[0];
@@ -470,7 +463,7 @@ async function generatePalette() {
         return;
     }
 
-    // Show loading
+    // Show loading state and hide previous results
     document.getElementById('loadingState').classList.remove('hidden');
     document.getElementById('resultsSection').classList.add('hidden');
 
@@ -480,24 +473,40 @@ async function generatePalette() {
         - "role": purpose (Primary, Secondary, Accent, Background, Text)
         Return ONLY valid JSON array.`;
 
+    // Handle text prompt input
     if (textPrompt) {
         parts.push({ text: `${systemPrompt}\n\nCreate palette for: ${textPrompt}` });
-    } else if (imageFile) {
-        const base64 = await new Promise((resolve) => {
+    }
+    
+    // Handle image input and convert it to base64
+    if (imageFile) {
+        // This 'if' block is a small addition to ensure the system prompt is added for image-only requests
+        if (!textPrompt) {
+             parts.push({ text: `${systemPrompt}\n\nExtract palette from image:` });
+        }
+        const base64 = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = error => reject(error);
             reader.readAsDataURL(imageFile);
         });
-        parts.push({ text: `${systemPrompt}\n\nExtract palette from image:` });
         parts.push({ inlineData: { mimeType: imageFile.type, data: base64 } });
     }
 
+    // This is the main updated section
     try {
-        const response = await fetch(apiUrl, {
+        // 1. Call your own backend endpoint, not the Google API
+        const response = await fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            // 2. Send the parts array inside the correct body structure
             body: JSON.stringify({ contents: [{ parts }] })
         });
+
+        if (!response.ok) {
+            const errorInfo = await response.json();
+            throw new Error(errorInfo.message || 'The request to the server failed.');
+        }
 
         const result = await response.json();
         const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -506,25 +515,28 @@ async function generatePalette() {
             const cleanJson = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             currentPalette = JSON.parse(cleanJson);
 
-            // Render results
+            // Render all the results sections
             renderPalette(currentPalette);
             renderTemplates(currentPalette);
             renderAccessibility(currentPalette);
 
-            // Show results
+            // Show results and hide loading
             document.getElementById('loadingState').classList.add('hidden');
             document.getElementById('resultsSection').classList.remove('hidden');
 
-            // Initialize Lucide icons
-            lucide.createIcons();
+            // Re-initialize Lucide icons if they exist in new content
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+        } else {
+             throw new Error("No valid content returned from the API.");
         }
     } catch (error) {
-        console.error('Error:', error);
-        alert('Failed to generate palette. Please try again.');
+        console.error('Error in generatePalette:', error);
+        alert(`Failed to generate palette: ${error.message}`);
         document.getElementById('loadingState').classList.add('hidden');
     }
 }
-
 // Event listeners
 document.getElementById('generateBtn').addEventListener('click', generatePalette);
 
