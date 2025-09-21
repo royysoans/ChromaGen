@@ -13,7 +13,7 @@ function createParticles() {
 
 createParticles();
 
-const apiKey = 'AIzaSyDfLiQ-idXEY4BOE2pncBSGjiFsqMKoCiE';
+const apiKey = process.env.API_KEY;
 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
 
 let currentPalette = [];
